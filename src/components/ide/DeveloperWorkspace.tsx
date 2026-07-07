@@ -365,7 +365,12 @@ export const DeveloperWorkspace: React.FC = () => {
   const [chatLoading, setChatLoading] = useState(false);
 
   // Selected file reference
-  const currentFile = activeFiles.find(f => f.name === selectedFileName) || activeFiles[0];
+  const currentFile = activeFiles.find(f => f.name === selectedFileName) || activeFiles[0] || {
+    name: "main.rs",
+    path: "src-tauri/src/main.rs",
+    language: "rust",
+    content: `// Select a folder or create a file to start coding...`
+  };
 
   // Terminal input & command history states
   const [terminalInput, setTerminalInput] = useState("");
