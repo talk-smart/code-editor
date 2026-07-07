@@ -8,6 +8,7 @@ import {
   FolderOpen, Share2, ExternalLink, LogOut, Copy
 } from "lucide-react";
 import { useApp, safeInvoke } from "../../context/AppContext";
+import { useWorkspace } from "../../context/WorkspaceManager";
 import { XtermTerminal } from "./XtermTerminal";
 import Editor from "@monaco-editor/react";
 
@@ -39,26 +40,30 @@ export const DeveloperWorkspace: React.FC = () => {
   const {
     executionLogs,
     clearLogs,
-    activeFiles,
-    setActiveFiles,
-    selectedFileName,
-    setSelectedFileName,
     executeTerminalCommand,
     terminalCwd,
     setTerminalCwd,
     isLoading,
     apiKey,
     aiModel,
-    saveApiConfig,
+    saveApiConfig
+  } = useApp();
+
+  const {
     activeWorkspacePath,
+    currentProject: workspaceName,
+    activeFileName: selectedFileName,
+    openedTabs: activeFiles,
     projectType,
     runCommand,
     installCommand,
     pkgManager,
     gitStatus,
     loadWorkspaceData,
-    saveFileToDisk
-  } = useApp();
+    saveFileToDisk,
+    setActiveFileName: setSelectedFileName,
+    setOpenedTabs: setActiveFiles,
+  } = useWorkspace();
 
   // Local settings buffers
   const [tempApiKey, setTempApiKey] = useState(apiKey);
@@ -335,7 +340,6 @@ export const DeveloperWorkspace: React.FC = () => {
   // Expanded file management states
   const [autoSave, setAutoSave] = useState(false);
   const [recentFiles, setRecentFiles] = useState<string[]>(["main.rs", "tauri.conf.json", "scraper.js"]);
-  const [workspaceName, setWorkspaceName] = useState("haka baka");
   const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -463,12 +467,12 @@ export const DeveloperWorkspace: React.FC = () => {
     }
 
     const rootName = fileList[0].webkitRelativePath.split("/")[0] || "Workspace Project";
-    setWorkspaceName(rootName);
-    if (rootName.toLowerCase() === "haka baka") {
-      setTerminalCwd("C:\\Users\\heman\\OneDrive\\Desktop\\haka baka");
-    } else {
-      setTerminalCwd(`C:\\Users\\heman\\OneDrive\\Desktop\\haka baka\\${rootName}`);
-    }
+    const newPath = rootName.toLowerCase() === "haka baka" 
+      ? "C:\\Users\\heman\\OneDrive\\Desktop\\haka baka" 
+      : `C:\\Users\\heman\\OneDrive\\Desktop\\haka baka\\${rootName}`;
+    
+    loadWorkspaceData(newPath);
+    setTerminalCwd(newPath);
 
     const filesToRead = textFiles.slice(0, 25);
     const filesWithContent: any[] = [];

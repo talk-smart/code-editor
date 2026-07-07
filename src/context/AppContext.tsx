@@ -31,10 +31,6 @@ export interface AppContextType {
   setExecutionLogs: React.Dispatch<React.SetStateAction<string[]>>;
   clearLogs: () => void;
   addLog: (log: string) => void;
-  activeFiles: MockFile[];
-  setActiveFiles: (files: MockFile[]) => void;
-  selectedFileName: string;
-  setSelectedFileName: (name: string) => void;
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
   
@@ -49,97 +45,11 @@ export interface AppContextType {
   aiModel: string;
   setAiModel: (model: string) => void;
   saveApiConfig: (key: string, model: string) => Promise<boolean>;
-
-  // Project Workspace & Context Synchronization States
-  activeWorkspacePath: string;
-  setActiveWorkspacePath: (path: string) => void;
-  projectType: string;
-  runCommand: string;
-  installCommand: string;
-  pkgManager: string;
-  gitStatus: string;
-  loadWorkspaceData: (path: string) => Promise<void>;
-  saveFileToDisk: (filePath: string, content: string) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const initialFiles: MockFile[] = [
-  {
-    name: "main.rs",
-    path: "src-tauri/src/main.rs",
-    language: "rust",
-    content: `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::process::Command;
-
-#[tauri::command]
-fn execute_command(cmd: String) -> Result<String, String> {
-    let output = if cfg!(target_os = "windows") {
-        Command::new("powershell")
-            .args(&["-Command", &cmd])
-            .output()
-    } else {
-        Command::new("sh")
-            .args(&["-c", &cmd])
-            .output()
-    };
-
-    match output {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-            if out.status.success() {
-                Ok(stdout)
-            } else {
-                Err(if stderr.is_empty() { stdout } else { stderr })
-            }
-        }
-        Err(e) => Err(format!("Failed to execute: {}", e)),
-    }
-}
-
-fn main() {
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![execute_command])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-}`
-  },
-  {
-    name: "tauri.conf.json",
-    path: "src-tauri/tauri.conf.json",
-    language: "json",
-    content: `{
-  "productName": "Antigravity Dev Environment",
-  "version": "0.1.0",
-  "identifier": "com.antigravity.ide",
-  "bundle": {
-    "active": true,
-    "targets": "all"
-  }
-}`
-  },
-  {
-    name: "scraper.js",
-    path: "scraper.js",
-    language: "javascript",
-    content: `// Web scraper utility for developer workspace telemetry
-const axios = require('axios');
-const cheerio = require('cheerio');
-
-async function scrapeMetadata() {
-  const res = await axios.get('https://news.ycombinator.com/');
-  const $ = cheerio.load(res.data);
-  const titles = [];
-  $('.titleline > a').each((i, el) => {
-    titles.push($(el).text());
-  });
-  console.log("Scraped titles:", titles.slice(0, 5));
-}
-scrapeMetadata();`
-  }
-];
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [uiMode, setUiMode] = useState<UIMode>("ide");
@@ -151,8 +61,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     "Antigravity Developer Shell environment loaded.",
     "Type 'help' to see list of available simulated workspace commands."
   ]);
-  const [activeFiles, setActiveFiles] = useState<MockFile[]>(initialFiles);
-  const [selectedFileName, setSelectedFileName] = useState<string>("main.rs");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [terminalCwd, setTerminalCwd] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -160,20 +68,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
     return "C:\\Users\\heman\\OneDrive\\Desktop\\haka baka";
   });
-
-  // Project Workspace & Context Synchronization States
-  const [activeWorkspacePath, setActiveWorkspacePath] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("antigravity_active_workspace_path") || "C:\\Users\\heman\\OneDrive\\Desktop\\haka baka";
-    }
-    return "C:\\Users\\heman\\OneDrive\\Desktop\\haka baka";
-  });
-
-  const [projectType, setProjectType] = useState<string>("unknown");
-  const [runCommand, setRunCommand] = useState<string>("npm run dev");
-  const [installCommand, setInstallCommand] = useState<string>("npm install");
-  const [pkgManager, setPkgManager] = useState<string>("npm");
-  const [gitStatus, setGitStatus] = useState<string>("");
 
   // Gemini API Configuration States
   const [apiKey, setApiKey] = useState<string>(() => {
@@ -210,97 +104,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [apiKey]);
 
-  const loadWorkspaceData = async (path: string) => {
-    setIsLoading(true);
-    try {
-      addLog(`[SYSTEM] Workspace Changed event fired: ${path}`);
-      setTerminalCwd(path);
-      localStorage.setItem("antigravity_active_workspace_path", path);
-      setActiveWorkspacePath(path);
 
-      // 1. Fetch files recursively from backend
-      const filesRes = await fetch(`http://localhost:1422/api/project/files?path=${encodeURIComponent(path)}`);
-      if (filesRes.ok) {
-        const data = await filesRes.json();
-        if (data.files && data.files.length > 0) {
-          setActiveFiles(data.files);
-          // Auto-select preferred file if present, else first file
-          const preferred = data.files.find((f: any) => 
-            f.name === "main.rs" || 
-            f.name === "package.json" || 
-            f.name === "index.html" || 
-            f.name === "main.py" || 
-            f.name === "app.py"
-          ) || data.files[0];
-          setSelectedFileName(preferred.name);
-        } else {
-          setActiveFiles([]);
-          setSelectedFileName("");
-        }
-      } else {
-        addLog(`[WARNING] Failed to load workspace files from disk.`);
-      }
-
-      // 2. Fetch project runtime detection
-      const detectRes = await fetch(`http://localhost:1422/api/project/detect?path=${encodeURIComponent(path)}`);
-      if (detectRes.ok) {
-        const detectData = await detectRes.json();
-        setProjectType(detectData.type);
-        setRunCommand(detectData.runCmd);
-        setInstallCommand(detectData.installCmd);
-        setPkgManager(detectData.pkgManager);
-        addLog(`[SYSTEM] Project Runtime: ${detectData.type.toUpperCase()} (Commands: Run='${detectData.runCmd}', Install='${detectData.installCmd}')`);
-      }
-
-      // 3. Fetch Git status metadata
-      const gitRes = await fetch(`http://localhost:1422/api/project/git?path=${encodeURIComponent(path)}`);
-      if (gitRes.ok) {
-        const gitData = await gitRes.json();
-        if (gitData.initialized) {
-          setGitStatus(`Branch: ${gitData.branch}\nStatus:\n${gitData.status}`);
-          addLog(`[SYSTEM] Git Status: Active branch '${gitData.branch}'`);
-        } else {
-          setGitStatus("Not a Git repository");
-        }
-      }
-
-      // 4. Fire WorkspaceChanged event
-      if (typeof window !== "undefined") {
-        const event = new CustomEvent("WorkspaceChanged", { detail: { path } });
-        window.dispatchEvent(event);
-      }
-    } catch (e: any) {
-      addLog(`[ERROR] Failed to load workspace data: ${e.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const saveFileToDisk = async (filePath: string, content: string) => {
-    try {
-      const fullPath = activeWorkspacePath.includes("/") 
-        ? `${activeWorkspacePath}/${filePath}`
-        : `${activeWorkspacePath}\\${filePath}`;
-        
-      const res = await fetch("http://localhost:1422/api/file/write", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: fullPath, content })
-      });
-      if (res.ok) {
-        addLog(`[FILE] Saved file to disk: ${filePath}`);
-        return true;
-      }
-    } catch (e: any) {
-      addLog(`[ERROR] Failed to save file ${filePath}: ${e.message}`);
-    }
-    return false;
-  };
-
-  // Load workspace data on mount
-  useEffect(() => {
-    loadWorkspaceData(activeWorkspacePath);
-  }, []);
 
   const saveApiConfig = async (key: string, model: string): Promise<boolean> => {
     setApiKey(key);
@@ -400,17 +204,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         addLog("");
         addLog("Mode                 LastWriteTime         Length Name");
         addLog("----                 -------------         ------ ----");
-        activeFiles.forEach(file => {
-          const dateStr = new Date().toLocaleDateString();
-          const sizeStr = file.content.length.toString().padStart(8);
-          addLog(`-a---          ${dateStr}  10:32 AM     ${sizeStr} ${file.path}`);
-        });
+        addLog("-a---          2026-07-04  10:32 AM          1024 main.rs");
+        addLog("-a---          2026-07-04  10:32 AM           512 tauri.conf.json");
+        addLog("-a---          2026-07-04  10:32 AM          2048 scraper.js");
       } else if (lower.startsWith("cat ")) {
-        const fileName = trimmed.slice(4).trim();
-        const file = activeFiles.find(f => f.name.toLowerCase() === fileName.toLowerCase());
-        
-        if (file) {
-          addLog(file.content);
+        const fileName = trimmed.slice(4).trim().toLowerCase();
+        if (fileName === "main.rs") {
+          addLog("#[tauri::command]\nfn execute_command() { ... }");
+        } else if (fileName === "tauri.conf.json") {
+          addLog('{\n  "productName": "Antigravity IDE"\n}');
+        } else if (fileName === "scraper.js") {
+          addLog('console.log("Telemetry scraper running...");');
         } else {
           addLog(`cat: ${fileName}: No such file in active workspace context.`);
         }
@@ -448,10 +252,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setExecutionLogs,
         clearLogs,
         addLog,
-        activeFiles,
-        setActiveFiles,
-        selectedFileName,
-        setSelectedFileName,
         isLoading,
         setIsLoading,
         executeTerminalCommand,
@@ -461,16 +261,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setApiKey,
         aiModel,
         setAiModel,
-        saveApiConfig,
-        activeWorkspacePath,
-        setActiveWorkspacePath,
-        projectType,
-        runCommand,
-        installCommand,
-        pkgManager,
-        gitStatus,
-        loadWorkspaceData,
-        saveFileToDisk
+        saveApiConfig
       }}
     >
       {children}
