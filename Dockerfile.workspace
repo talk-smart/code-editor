@@ -1,0 +1,82 @@
+FROM ubuntu:22.04
+
+# Avoid prompt choices for timezone / configurations
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Update apt repositories and install core compiler tooling
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    zip \
+    unzip \
+    tar \
+    gcc \
+    g++ \
+    make \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js LTS (Node 20) and packet managers
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g pnpm yarn \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python 3, pip, and virtual environments
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Java OpenJDK 17 LTS, Maven, and Gradle
+RUN apt-get update && apt-get install -y \
+    openjdk-17-jdk \
+    maven \
+    gradle \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Go compiler
+RUN apt-get update && apt-get install -y golang \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust compiler toolchain globally
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path \
+    && chmod -R a+w $RUSTUP_HOME $CARGO_HOME
+
+# Install PHP and Composer package manager
+RUN apt-get update && apt-get install -y \
+    php-cli \
+    php-xml \
+    php-mbstring \
+    && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Docker CLI client
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update && apt-get install -y docker-ce-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add a non-root developer user with full sudo permissions
+RUN useradd -m -s /bin/bash developer \
+    && echo "developer ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/developer
+
+# Setup local mount point and owner permissions
+WORKDIR /workspace
+RUN chown -R developer:developer /workspace
+
+USER developer
+
+# Expose default HTTP preview environment port
+ENV PORT=3000
+
+CMD ["bash"]

@@ -1,0 +1,62 @@
+{
+  "productName": "Antigravity Dev Environment",
+  "version": "0.1.0",
+  "identifier": "com.antigravity.ide",
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "Antigravity Corporation",
+    "windows": {
+      "nsis": {
+        "installMode": "perUser",
+        "languages": ["English"],
+        "oneClick": false
+      },
+      "msix": {
+        "publisher": "CN=8DF60C45-BF3C-43AA-B0AE-417A634B03DF",
+        "publisherDisplayName": "Antigravity Corporation",
+        "displayName": "Antigravity Dev Environment",
+        "description": "Enterprise cross-platform development tool with physical elements",
+        "languages": ["en-US"],
+        "store": true
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "signing": {
+        "identity": null
+      }
+    },
+    "deb": {
+      "depends": []
+    }
+  },
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist animate-none"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Antigravity Dev Environment",
+        "width": 1280,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}
