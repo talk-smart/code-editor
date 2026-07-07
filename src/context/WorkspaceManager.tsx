@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { MockFile } from "./AppContext";
+import { EventBus } from "./EventBus";
 
 export interface WorkspaceState {
   activeWorkspacePath: string;
@@ -66,6 +67,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
 
   const loadWorkspaceData = async (path: string) => {
     setIsReady(false);
+    await EventBus.publish("WorkspaceLoading", { path });
     try {
       console.log(`[WORKSPACE] Loading directory: ${path}`);
       localStorage.setItem("antigravity_active_workspace_path", path);
@@ -79,12 +81,18 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
         return updated;
       });
 
+      await EventBus.publish("WorkspaceOpened", { path });
+      await EventBus.publish("WorkspaceChanged", { path });
+
+      let filesCount = 0;
+
       // 1. Fetch files recursively from backend
       const filesRes = await fetch(`http://localhost:1422/api/project/files?path=${encodeURIComponent(path)}`);
       if (filesRes.ok) {
         const data = await filesRes.json();
         if (data.files && data.files.length > 0) {
           setOpenedTabs(data.files);
+          filesCount = data.files.length;
           // Auto-select preferred file if present, else first file
           const preferred = data.files.find((f: any) => 
             f.name === "main.rs" || 
@@ -121,13 +129,16 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // 4. Dispatch a WorkspaceChanged event
+      await EventBus.publish("WorkspaceReady", { path, filesCount });
+
+      // 4. Dispatch a WorkspaceChanged event (legacy custom event for safety)
       if (typeof window !== "undefined") {
         const event = new CustomEvent("WorkspaceChanged", { detail: { path } });
         window.dispatchEvent(event);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("[WORKSPACE] Failed to load workspace data:", e);
+      await EventBus.publish("WorkspaceError", { path, error: e.message || String(e) });
     } finally {
       setIsReady(true);
     }
@@ -159,7 +170,15 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
     setActiveFileName("");
     setProjectType("unknown");
     setGitStatus("");
+    EventBus.publish("WorkspaceClosed", undefined);
   };
+
+  // Publish ActiveFileChanged event whenever activeFileName updates
+  useEffect(() => {
+    if (activeFileName) {
+      EventBus.publish("ActiveFileChanged", { filePath: activeFileName });
+    }
+  }, [activeFileName]);
 
   // Load active workspace on mount
   useEffect(() => {

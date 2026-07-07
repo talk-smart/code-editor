@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useApp, safeInvoke } from "../../context/AppContext";
 import { useWorkspace } from "../../context/WorkspaceManager";
+import { EventBus } from "../../context/EventBus";
 import { XtermTerminal } from "./XtermTerminal";
 import Editor from "@monaco-editor/react";
 
@@ -40,6 +41,7 @@ export const DeveloperWorkspace: React.FC = () => {
   const {
     executionLogs,
     clearLogs,
+    addLog,
     executeTerminalCommand,
     terminalCwd,
     setTerminalCwd,
@@ -78,6 +80,41 @@ export const DeveloperWorkspace: React.FC = () => {
   useEffect(() => {
     setTempAiModel(aiModel);
   }, [aiModel]);
+
+  // Subscribe to Workspace events via EventBus
+  useEffect(() => {
+    const unsubLoading = EventBus.subscribe("WorkspaceLoading", (payload) => {
+      console.log(`[IDE EVENT] Workspace is loading: ${payload.path}`);
+      addLog(`[EVENT] Loading workspace: ${payload.path}`);
+    });
+
+    const unsubOpened = EventBus.subscribe("WorkspaceOpened", (payload) => {
+      console.log(`[IDE EVENT] Workspace opened: ${payload.path}`);
+      addLog(`[EVENT] Opened workspace: ${payload.path}`);
+    });
+
+    const unsubReady = EventBus.subscribe("WorkspaceReady", (payload) => {
+      console.log(`[IDE EVENT] Workspace ready: ${payload.path}. Files: ${payload.filesCount}`);
+      addLog(`[EVENT] Workspace ready: ${payload.path} (${payload.filesCount} files loaded)`);
+    });
+
+    const unsubClosed = EventBus.subscribe("WorkspaceClosed", () => {
+      console.log(`[IDE EVENT] Workspace closed`);
+      addLog(`[EVENT] Workspace closed`);
+    });
+
+    const unsubFileChanged = EventBus.subscribe("ActiveFileChanged", (payload) => {
+      console.log(`[IDE EVENT] Active file changed to: ${payload.filePath}`);
+    });
+
+    return () => {
+      unsubLoading();
+      unsubOpened();
+      unsubReady();
+      unsubClosed();
+      unsubFileChanged();
+    };
+  }, []);
 
   const handleSaveApiSettings = async () => {
     setSaveStatus("saving");

@@ -5,12 +5,48 @@
 ---
 
 ## 🎯 Purpose
-Enables clean, modular components that communicate via asynchronous system events rather than direct coupling.
+Provide a lightweight, type-safe event broadcasting mechanism that removes direct dependency coupling between components in the IDE.
 
-## 📢 Core Events List
-* **WorkspaceOpened**: Triggered when a new active folder path is loaded.
-* **FileSaved**: Triggered when code modifications write to disk.
-* **TerminalStarted / TerminalExited**: Tracks terminal PTY lifetimes.
-* **GitChanged**: Signals branch updates, repository commits, and staging changes.
-* **TestsFinished**: Reports typecheck, linting, and unit testing results.
-* **AICompleted**: Fired when code generation tasks are fully applied.
+## 💾 Event Signature Specifications
+```typescript
+export type EventType = 
+  | "WorkspaceLoading"
+  | "WorkspaceOpened"
+  | "WorkspaceChanged"
+  | "WorkspaceReady"
+  | "WorkspaceClosed"
+  | "WorkspaceError"
+  | "ActiveFileChanged"
+  | "ProjectIndexed";
+
+export interface EventPayloads {
+  WorkspaceLoading: { path: string };
+  WorkspaceOpened: { path: string };
+  WorkspaceChanged: { path: string };
+  WorkspaceReady: { path: string; filesCount: number };
+  WorkspaceClosed: void;
+  WorkspaceError: { path: string; error: string };
+  ActiveFileChanged: { filePath: string };
+  ProjectIndexed: { path: string };
+}
+```
+
+---
+
+## 🛠️ Refactoring & Integration Plan
+
+### A. New EventBus.ts (`src/context/EventBus.ts`)
+- Implement a type-safe class with methods:
+  - `subscribe(event, handler)`: Registers standard listener. Returns unsubscribe handle.
+  - `once(event, handler)`: One-time invocation hook.
+  - `publish(event, payload)`: Asynchronously triggers all subscribers with error isolation blocks.
+
+### B. WorkspaceManager.tsx Integration
+- Publish `WorkspaceLoading` and `WorkspaceOpened` when starting loading directory.
+- Publish `WorkspaceReady` once files scan and platform detection finish successfully.
+- Publish `WorkspaceError` if filesystem indexing encounters directory load failures.
+- Publish `WorkspaceClosed` on workspace close.
+- Publish `ActiveFileChanged` when switching active focused tab buffers.
+
+### C. UI Components Integration
+- **DeveloperWorkspace.tsx**: Replace standard React dependency hooks / DOM CustomEvents with EventBus subscriptions to handle terminal session resets and AI contextual instructions compilation.
